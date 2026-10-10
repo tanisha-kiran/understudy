@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AttendanceTracker</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f6f5f1; color: #1c1c1a; margin: 0; padding: 40px; }
+    main { max-width: 640px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; }
+    p.sub { color: #6b6a63; margin: 0 0 24px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e3e1d8; border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #eeece4; }
+    th { background: #faf9f5; font-size: 13px; color: #6b6a63; }
+    .badge { padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+    .Present { background: #e3f6d5; color: #2f6b12; }
+    .Absent { background: #fbe3e0; color: #a12a1d; }
+    .next { display:inline-flex; align-items:center; margin:16px 0; border-radius:7px; background:#1c1c1a; color:white; padding:10px 14px; text-decoration:none; font-size:14px; font-weight:600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>AttendanceTracker</h1>
+    <p class="sub">Today's class attendance</p>
+    <a class="next" href="/sandbox/report">Continue to DailyReport →</a>
+    <table id="attendance-table" aria-label="Attendance records">
+      <thead><tr><th>Student</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </main>
+  <script>
+    fetch("/api/state").then(r => r.json()).then(s => {
+      document.querySelector("#attendance-table tbody").innerHTML = s.students
+        .map(st => `<tr data-status="${st.status}"><td>${st.name}</td><td><span class="badge ${st.status}">${st.status}</span></td></tr>`)
+        .join("");
+    });
+  </script>
+</body>
+</html>

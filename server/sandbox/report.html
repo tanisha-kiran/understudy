@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>DailyReport</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f6f5f1; color: #1c1c1a; margin: 0; padding: 40px; }
+    main { max-width: 480px; margin: 0 auto; background: #fff; border: 1px solid #e3e1d8; border-radius: 10px; padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cfccc0; border-radius: 6px; font: inherit; }
+    button { margin-top: 18px; padding: 10px 18px; border: 0; border-radius: 6px; background: #1c1c1a; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    #confirmation { margin-top: 18px; padding: 12px; border-radius: 6px; background: #e3f6d5; color: #2f6b12; display: none; }
+    #saved { margin-top: 14px; font-size: 14px; color: #6b6a63; }
+    #ghost-cursor { display:none; position:fixed; left:0; top:0; z-index:10; width:19px; height:19px; border:2px solid #16826a; border-radius:50%; background:#c5fff0a8; box-shadow:0 0 0 7px #16826a20, 0 3px 12px #1115; pointer-events:none; transition:transform .42s cubic-bezier(.2,.8,.2,1); }
+    #ghost-badge { display:none; position:fixed; right:12px; top:12px; z-index:11; border-radius:999px; padding:6px 10px; background:#173d34; color:#e9fff8; font:600 11px system-ui; letter-spacing:.05em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DailyReport</h1>
+    <form id="report-form">
+      <label for="count">Present count</label>
+      <input id="count" name="count" type="number" min="0" />
+      <label for="note">Report note</label>
+      <textarea id="note" name="note" rows="3"></textarea>
+      <button id="submit-btn" type="submit">Submit</button>
+    </form>
+    <div id="confirmation" role="status">Report submitted.</div>
+    <div id="saved">Loading saved report...</div>
+  </main>
+  <div id="ghost-cursor"></div><div id="ghost-badge">UNDERSTUDY · LIVE PREVIEW</div>
+  <script>
+    const savedEl = document.getElementById("saved");
+    const showSaved = (r) => {
+      savedEl.textContent = `Saved report: count=${r.count ?? "empty"}, note="${r.note || "empty"}", status=${r.status}`;
+      savedEl.dataset.status = r.status;
+    };
+    // Button label comes from server state so the "interface change" demo toggle can rename it.
+    const ghostMode = new URLSearchParams(location.search).has("ghost");
+    const ghost = document.getElementById("ghost-cursor");
+    const ghostBadge = document.getElementById("ghost-badge");
+    const countInput = document.getElementById("count");
+    const noteInput = document.getElementById("note");
+    if (ghostMode) {
+      ghost.style.display = "block"; ghostBadge.style.display = "block";
+      countInput.disabled = true; noteInput.disabled = true; document.getElementById("submit-btn").disabled = true;
+      setInterval(async () => {
+        const s = await fetch("/api/state").then(r => r.json()).catch(() => null);
+        if (!s?.preview) return;
+        const preview = s.preview;
+        countInput.value = preview.count ?? ""; noteInput.value = preview.note ?? "";
+        if (preview.active && preview.target) {
+          const target = document.querySelector(preview.target);
+          if (target) { const r = target.getBoundingClientRect(); ghost.style.transform = `translate(${Math.max(0,r.left+12)}px,${Math.max(0,r.top+12)}px)`; }
+          ghostBadge.textContent = `UNDERSTUDY · ${preview.target === "#submit-btn" ? "AWAITING APPROVAL" : "LIVE PREVIEW"}`;
+        } else ghostBadge.textContent = "UNDERSTUDY · PREVIEW";
+      }, 280);
+    }
+    fetch("/api/state").then(r => r.json()).then(s => {
+      document.getElementById("submit-btn").textContent = s.submitLabel;
+      showSaved(s.report);
+    });
+    document.getElementById("report-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = { count: document.getElementById("count").value, note: document.getElementById("note").value };
+      const r = await fetch("/api/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+      document.getElementById("confirmation").style.display = "block";
+      showSaved(r);
+    });
+  </script>
+</body>
+</html>
