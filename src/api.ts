@@ -34,6 +34,7 @@ export type SkillCard = {
 export type CompileResult = { source: "openai" | "fallback" | "saved"; note?: string; card: SkillCard; approved?: boolean };
 export type RecordingStep = { at: string; type: string; url: string; target: string; selector: string; visibleText: string; value?: string; screenshot?: string };
 export type Recording = { id?: string; status: "idle" | "recording" | "complete"; createdAt?: string; finishedAt?: string; steps: RecordingStep[]; narration?: { at: string; text: string }[]; allowedOrigin?: string };
+export type TicketEvent = { eventId: string; ticketId: string; title: string; priority: string; status: string; source: string; receivedAt: string; occurredAt: string | null; deduplicated?: boolean };
 
 const j = async <T,>(url: string, method = "GET", body?: unknown): Promise<T> => {
   const r = await fetch(url, {
@@ -67,4 +68,6 @@ export const api = {
   narration: (text: string, at = new Date().toISOString()) => j<Recording>("/api/recording/narration", "POST", { text, at }),
   stopRecording: () => j<Recording>("/api/recording/stop", "POST"),
   audit: () => j<{ entries: { at: string; event: string; detail: Record<string, unknown> }[]; storage: { type: string; durable: boolean } }>("/api/audit"),
+  ticketEvents: () => j<{ adapter: string; authentication: string; events: TicketEvent[] }>("/api/integrations/tickets"),
+  sampleTicket: () => j<{ event: TicketEvent; deduplicated: boolean }>("/api/integrations/tickets/sample", "POST", {}),
 };

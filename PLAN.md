@@ -14,7 +14,7 @@ Deliver a rehearsable local **teach → review → approve → execute → verif
 | Skill Card compiler | Complete | OpenAI structured output when configured; validated deterministic fallback; changing values can become parameter chips; card instructions and confidence are editable. |
 | Runner and safety | Complete | Fixed local task adapter, per-card first-run preview gate, approved-card check, final-submit approval on every run, pause/stop, snapshot, verification, bounded known recovery, append-only run audit. |
 | Panel | Complete | Standalone React dashboard, live recording list, editable Skill Card, confidence meters, SSE timeline, live target preview with ghost cursor, result diff/undo, history. |
-| Trigger and storage | Complete | Simulated local event and loopback/authenticated webhook adapter; SQLite for state, skills, runs, snapshots, recordings, and audit log. |
+| Trigger and storage | Complete | Simulated skill trigger; generic ticket-webhook intake streamed live into the dashboard; SQLite for state, skills, runs, snapshots, recordings, ticket events, and audit log. |
 | Demo handoff | Complete | `npm run demo` resets and starts the local demo; README documents setup, rehearsal, APIs, and integration boundaries. Build and smoke scenario pass. |
 
 ## Adapter boundaries
@@ -23,6 +23,7 @@ Deliver a rehearsable local **teach → review → approve → execute → verif
 - **Compiler:** optional OpenAI API; deterministic validated compiler is the fallback. The API model setting is independent of the model used by Codex to help build this project.
 - **Runner:** real local Playwright, fixed to `localhost:8787` and the attendance/report pages. Agents API computer use is not connected to the laptop browser.
 - **Trigger:** local webhook and Simulate event control work. MCP Events delivery is not connected.
+- **Live ticket intake:** generic inbound helpdesk webhook accepts mapped ticket events, persists them, and broadcasts updates to the dashboard over SSE. It does not perform ticket writes or outbound replies; a provider connection and public HTTPS deployment remain unconfigured.
 - **Panel:** standalone React works. Native ChatGPT sidebar/conversation/file panels are not connected.
 - **Store:** SQLite is implemented with Node 22's built-in `node:sqlite`; there is no volatile in-memory fallback in this build.
 

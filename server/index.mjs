@@ -7,6 +7,8 @@ import * as runner from "./runner.mjs";
 import { recorder, resolveScreenshot } from "./recorder.mjs";
 import { store } from "./store.mjs";
 import { createReadStream } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { ticketAdapter } from "./ticket-adapter.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -137,6 +139,51 @@ app.post("/api/webhook", (req, res) => {
     store.audit("trigger.webhook_received", { skillId: req.body?.skillId, event: req.body?.event || "unspecified" });
     res.json(result);
   } catch (e) { res.status(403).json({ error: String(e?.message ?? e) }); }
+});
+
+// --- Live helpdesk data adapter (ingest and display only; no ticket is changed) ---
+const webhookAllowed = (req) => {
+  const ip = String(req.socket.remoteAddress || "").replace(/^::ffff:/, "");
+  const localSocket = ip === "127.0.0.1" || ip === "::1";
+  // A reverse proxy can make a public request appear loopback-local. Do not
+  // accept forwarded traffic without the shared secret when one is unset.
+  const forwarded = Boolean(req.get("forwarded") || req.get("x-forwarded-for") || req.get("x-real-ip"));
+  const local = localSocket && !forwarded;
+  const secret = process.env.UNDERSTUDY_WEBHOOK_SECRET;
+  return secret ? req.get("x-understudy-secret") === secret : local;
+};
+app.get("/api/integrations/tickets", (_req, res) => res.json({
+  adapter: ticketAdapter.kind,
+  delivery: "webhook",
+  actionPolicy: "events are stored and shown for review; no helpdesk write is performed",
+  authentication: process.env.UNDERSTUDY_WEBHOOK_SECRET ? "shared-secret" : "loopback-only",
+  events: ticketAdapter.list(),
+}));
+app.post("/api/integrations/tickets/webhook", (req, res) => {
+  if (!webhookAllowed(req)) return res.status(401).json({ error: "Ticket webhook authentication failed. Configure UNDERSTUDY_WEBHOOK_SECRET and send x-understudy-secret for non-local delivery." });
+  try {
+    const source = String(req.get("x-understudy-source") || "generic-helpdesk-webhook").slice(0, 80);
+    const result = ticketAdapter.ingest(req.body, source);
+    res.status(result.deduplicated ? 200 : 202).json(result);
+  } catch (e) { res.status(400).json({ error: String(e?.message ?? e) }); }
+});
+app.post("/api/integrations/tickets/sample", (_req, res) => {
+  try {
+    const result = ticketAdapter.ingest({
+      event_id: `sample-${randomUUID()}`,
+      occurred_at: new Date().toISOString(),
+      ticket: { id: `T-${String(Date.now()).slice(-6)}`, subject: "Customer cannot export the monthly report", priority: "high", status: "open" },
+    }, "sample-event");
+    res.status(202).json(result);
+  } catch (e) { res.status(400).json({ error: String(e?.message ?? e) }); }
+});
+app.get("/api/integrations/tickets/events", (req, res) => {
+  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+  const send = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  send({ type: "snapshot", events: ticketAdapter.list() });
+  const unsubscribe = ticketAdapter.subscribe((ticket) => send({ type: "ticket.received", ticket, events: ticketAdapter.list() }));
+  const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 20_000);
+  req.on("close", () => { clearInterval(heartbeat); unsubscribe(); });
 });
 
 const port = Number(process.env.PORT ?? 8787);

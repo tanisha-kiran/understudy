@@ -15,6 +15,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS snapshots (id TEXT PRIMARY KEY, value TEXT NOT NULL, created_at TEXT NOT NULL, undone_at TEXT);
   CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, event TEXT NOT NULL, detail TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS recordings (id TEXT PRIMARY KEY, value TEXT NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS ticket_events (event_id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, value TEXT NOT NULL, received_at TEXT NOT NULL);
 `);
 
 const now = () => new Date().toISOString();
@@ -67,6 +68,18 @@ export const store = {
   saveRecording(recording) {
     db.prepare("INSERT INTO recordings(id, value, created_at) VALUES(?, ?, ?) ON CONFLICT(id) DO UPDATE SET value=excluded.value").run(recording.id, JSON.stringify(recording), recording.createdAt || now());
     return recording;
+  },
+  saveTicketEvent(event) {
+    db.prepare("INSERT INTO ticket_events(event_id, ticket_id, value, received_at) VALUES(?, ?, ?, ?) ON CONFLICT(event_id) DO NOTHING")
+      .run(event.eventId, event.ticketId, JSON.stringify(event), event.receivedAt);
+    return this.getTicketEvent(event.eventId);
+  },
+  getTicketEvent(id) {
+    const row = db.prepare("SELECT value FROM ticket_events WHERE event_id=?").get(id);
+    return row ? parse(row.value, null) : null;
+  },
+  listTicketEvents(limit = 30) {
+    return db.prepare("SELECT value FROM ticket_events ORDER BY received_at DESC LIMIT ?").all(limit).map((row) => parse(row.value, null)).filter(Boolean);
   },
   audit(event, detail = {}) {
     db.prepare("INSERT INTO audit_log(at, event, detail) VALUES(?, ?, ?)").run(now(), event, JSON.stringify(detail));

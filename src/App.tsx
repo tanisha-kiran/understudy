@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, ArrowDownRight, ArrowUpRight, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Clock3, Command, Download, FileText, Gauge, History, LoaderCircle, Mic, PanelLeftClose, Play, Plus, RotateCcw, Send, Settings2, ShieldCheck, Sparkles, Square, Upload, WandSparkles, X } from "lucide-react";
-import { api, type CompileResult, type Recording, type RunInfo, type SandboxState } from "./api";
+import { Activity, ArrowDownRight, ArrowUpRight, BadgeCheck, BookOpen, Check, ChevronRight, CircleHelp, Clock3, Command, Download, FileText, Gauge, History, LoaderCircle, Mic, PanelLeftClose, Play, Plus, Radio, RotateCcw, Send, Settings2, ShieldCheck, Sparkles, Square, Ticket, Upload, WandSparkles, X } from "lucide-react";
+import { api, type CompileResult, type Recording, type RunInfo, type SandboxState, type TicketEvent } from "./api";
 
 const defaultLesson = "Read today's student attendance table, calculate how many are Present, then write the count and a short summary to the DailyReport form. Pause for my approval before submitting. Verify the saved report.";
 const idleSteps = ["Read today's attendance", "Calculate present students", "Prepare the daily report", "Pause for approval", "Verify the saved report"];
@@ -19,12 +19,13 @@ export default function App() {
   const [recording, setRecording] = useState<Recording>({ status: "idle", steps: [], narration: [] });
   const [narration, setNarration] = useState("");
   const [voiceOn, setVoiceOn] = useState(false);
+  const [ticketEvents, setTicketEvents] = useState<TicketEvent[]>([]);
   const voiceRef = useRef<any>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [s, r, skills] = await Promise.all([api.state(), api.runInfo(), api.skills()]);
-      setState(s); setInfo(r); setSavedSkills(skills.skills);
+      const [s, r, skills, tickets] = await Promise.all([api.state(), api.runInfo(), api.skills(), api.ticketEvents()]);
+      setState(s); setInfo(r); setSavedSkills(skills.skills); setTicketEvents(tickets.events);
     } catch (error) { setMessage((error as Error).message); }
   }, []);
   useEffect(() => {
@@ -40,6 +41,14 @@ export default function App() {
     const stream = new EventSource("/api/run/events");
     stream.onmessage = (event) => {
       try { const next = JSON.parse(event.data); setInfo((previous) => ({ ...previous, status: next.status, timeline: next.timeline })); }
+      catch { /* Ignore malformed frames. */ }
+    };
+    return () => stream.close();
+  }, []);
+  useEffect(() => {
+    const stream = new EventSource("/api/integrations/tickets/events");
+    stream.onmessage = (event) => {
+      try { const next = JSON.parse(event.data); if (Array.isArray(next.events)) setTicketEvents(next.events); }
       catch { /* Ignore malformed frames. */ }
     };
     return () => stream.close();
@@ -178,6 +187,14 @@ export default function App() {
 
           <section className="panel history-panel"><div className="section-head"><div><div className="eyebrow small-eyebrow">RECENT ACTIVITY</div><h2>Run history</h2></div><button className="text-link as-button" onClick={() => setNav("Run History")}>View all <ArrowUpRight size={14} /></button></div>{info.history.length ? <div className="history-list">{info.history.slice(0, 4).map((run, i) => <div className="history-row" key={`${run.startedAt}-${i}`}><span className={`history-mark ${run.verification ? "verified" : ""}`}>{run.verification ? <Check size={13} /> : <Clock3 size={13} />}</span><span className="history-name"><b>{run.title}</b><small>{stamp(run.startedAt)} · {run.status}{run.recovery ? " · recovered" : ""}</small></span><span className={run.verification ? "history-verified" : "history-pending"}>{run.verification ? "Verified" : run.status}</span></div>)}</div> : <div className="empty-history"><span className="empty-history-icon"><History size={17} /></span><span><b>Your runs will show up here</b><small>Each run keeps its result and recovery notes.</small></span></div>}<div className="history-footer"><span><span className="history-pip" /> {info.history.length} saved {info.history.length === 1 ? "run" : "runs"}</span><button className="button-quiet" onClick={() => action(() => api.reset())}><RotateCcw size={14} /> Reset demo</button></div></section>
         </div>
+
+        <section className="panel ticket-panel">
+          <div className="section-head"><div className="section-title"><span className="section-icon muted-icon"><Radio size={17} /></span><div><div className="eyebrow small-eyebrow">REAL-TIME DATA · HELPDESK WEBHOOK</div><h2>Incoming support tickets</h2></div></div><span className="status-pill ready-pill"><span className="live-dot" /> WEBHOOK READY</span></div>
+          <p className="ticket-intro">Ticket events stream into this inbox as they arrive. This adapter only receives and displays data; it never changes a ticket or sends a reply.</p>
+          <div className="ticket-toolbar"><code>POST /api/integrations/tickets/webhook</code><button className="button-secondary" disabled={busy} onClick={() => action(async () => { const result = await api.sampleTicket(); setMessage(`Received ticket ${result.event.ticketId} over the local webhook adapter.`); })}><Ticket size={14} /> Send sample ticket</button></div>
+          {ticketEvents.length ? <div className="ticket-list">{ticketEvents.slice(0, 5).map((ticket) => <article className="ticket-row" key={ticket.eventId}><span className={`ticket-priority priority-${ticket.priority}`}>{ticket.priority}</span><span className="ticket-copy"><b>{ticket.title}</b><small>{ticket.ticketId} · {ticket.status} · {ticket.source}</small></span><time>{stamp(ticket.receivedAt)}</time></article>)}</div> : <div className="ticket-empty"><Ticket size={16} /><span>No incoming events yet. Send a sample or connect a helpdesk webhook.</span></div>}
+          <small className="ticket-footnote">External services need a reachable HTTPS endpoint and <code>UNDERSTUDY_WEBHOOK_SECRET</code>. Map the provider’s payload to ticket id, subject, priority, and status.</small>
+        </section>
 
         {state?.snapshot && <section className="panel diff-panel"><div className="section-head"><div><div className="eyebrow small-eyebrow">SANDBOX CHANGESET</div><h2>Before &amp; after</h2></div><button className="button-secondary undo-button" onClick={() => action(() => api.undo())}><RotateCcw size={14} /> Undo last run</button></div><div className="diff-table"><div className="diff-heading"><span>FIELD</span><span>BEFORE</span><span>AFTER</span></div><div className="diff-row"><b>Present count</b><span>{state.snapshot.count ?? "Empty"}</span><span className="diff-after">{saved?.count ?? "Empty"}<ArrowDownRight size={13} /></span></div><div className="diff-row"><b>Report note</b><span className="diff-note">{state.snapshot.note || "Empty"}</span><span className="diff-after diff-note">{saved?.note || "Empty"}</span></div><div className="diff-row"><b>Submission status</b><span>{state.snapshot.status}</span><span className="diff-after">{saved?.status ?? "Draft"}</span></div></div><small className="undo-note">Undo restores this local sandbox report to its captured state.</small></section>}
 

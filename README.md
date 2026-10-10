@@ -28,6 +28,7 @@ For separate terminals, use `npm run dev` and reset with the **Reset demo** butt
 
 - **Real locally:** Playwright recording and visible browser control; per-step screenshots; editable/schema-validated Skill Cards; optional OpenAI compilation; Playwright execution against the local pages; bounded Submit-to-Send Report recovery; live SSE run timeline; a mirrored report preview with ghost cursor; approval, pause, stop, verification, snapshots, undo, and append-only audit entries; SQLite persistence for state, skills, runs, snapshots, recordings, and audit log.
 - **Local adapter:** `POST /api/webhook` and the **Simulate event** control. With no `UNDERSTUDY_WEBHOOK_SECRET`, the webhook accepts loopback requests only. Set the secret and send it in `x-understudy-secret` for authenticated non-loopback delivery; public deployment still needs a reachable HTTPS endpoint.
+- **Live data intake:** the dashboard now includes a generic support-ticket webhook inbox. `POST /api/integrations/tickets/webhook` normalizes common ticket payloads, deduplicates by event ID, persists the event in SQLite, and streams it to the dashboard over SSE. It deliberately does not update the helpdesk or reply to a customer. It stores ticket ID, title, priority, status, source, and event timestamps; it drops requester fields and ticket body text. The **Send sample ticket** button exercises the same adapter locally.
 - **Mocked / not connected:** Agents API computer use, MCP Events delivery, and a native ChatGPT plugin sidebar/conversation panel. The standalone React dashboard is the demo panel. MCP Events and plugin integration require deployment and account registration; the hosted Agents API browser does not automatically share this laptop's localhost sandbox.
 - The runner only executes the fixed AttendanceTracker-to-DailyReport workflow on `localhost:8787`. Skill step text is reviewable and editable, but it cannot expand the runner's supported actions or domain scope. The recorder blocks browser requests outside the local demo origin.
 - Voice narration depends on browser speech-recognition support; timestamped typed narration is always available.
@@ -51,6 +52,10 @@ The smoke scenario exercises recording startup, card approval, first-run preview
 - Health/audit adapter info: `GET /api/audit`
 - Run event stream: `GET /api/run/events`
 - Local event webhook: `POST /api/webhook` with `{ "skillId": "...", "event": "..." }`
+- Generic helpdesk ticket intake: `POST /api/integrations/tickets/webhook` with `{ "event_id": "evt-123", "ticket": { "id": "T-123", "subject": "Export is failing", "priority": "high", "status": "open" } }`
+- Live ticket feed: `GET /api/integrations/tickets/events` (Server-Sent Events); current inbox: `GET /api/integrations/tickets`
+
+The ticket endpoint is loopback-only by default. For a reachable service, set a long random `UNDERSTUDY_WEBHOOK_SECRET` in the server's `.env` and send it as `x-understudy-secret`; set `x-understudy-source` to identify the sender. The application must also be deployed behind a properly secured HTTPS endpoint before a third-party helpdesk can deliver events. Configure the helpdesk's webhook to send the normalized JSON shape above (or add a provider-specific mapping adapter). This local prototype has no helpdesk credentials, ticket read API, outbound ticket updates, or production user authentication.
 
 Skill Cards can also be exported as JSON and imported into another local demo. Imported cards get a new ID and lose any previous approval so the recipient must review and approve them.
 
