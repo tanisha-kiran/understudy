@@ -33,9 +33,11 @@ export const recorder = {
   async start({ startPath = "/sandbox/attendance" } = {}) {
     if (!allowedPaths.has(startPath)) throw new Error("Recorder can only open the two local demo apps.");
     if (active) throw new Error("A recording is already active.");
-    const headless = process.env.HEADLESS === "true" || process.env.CI === "true";
-    try { browser = await chromium.launch({ headless, channel: "chrome" }); }
-    catch { browser = await chromium.launch({ headless }); }
+    // Teach mode needs the learner to see and control the page. Runner mode can
+    // be headless, but the recorder must stay visible even when the server uses
+    // HEADLESS=true for unattended demo execution.
+    try { browser = await chromium.launch({ headless: false, channel: "chrome" }); }
+    catch { browser = await chromium.launch({ headless: false }); }
     active = { id: `recording-${Date.now()}`, status: "recording", createdAt: new Date().toISOString(), steps: [], narration: [], allowedOrigin: `http://localhost:${process.env.PORT ?? 8787}` };
     page = await browser.newPage();
     await page.route("**/*", (route) => {
