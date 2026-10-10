@@ -1,6 +1,51 @@
 ﻿# The Understudy
 
-Teach a local workflow once, review the Skill Card, approve it, then watch an approval-gated run prepare a report. This hackathon build is deliberately scoped to two fake web apps: **AttendanceTracker** and **DailyReport**.
+The Understudy is a demonstration-to-automation agent: teach it a browser task once, review the plain-English Skill Card it creates, and let it repeat the workflow with visible steps and human approval.
+
+## What it does and why it matters
+
+People often repeat the same small browser tasks across forms, spreadsheets, and internal tools. Recreating each one as a brittle script takes time and breaks when a page changes. The Understudy explores a more teachable approach: show the task once, let the agent turn it into steps you can edit, then keep a person in control of every consequential action.
+
+The demo copies today's present-student count from **AttendanceTracker** into **DailyReport**. It records the teaching session, creates a Skill Card, previews the report before submitting, asks for approval, verifies the saved result, records an audit trail, and offers Undo. A support-ticket webhook inbox also shows incoming ticket events in real time. This prototype is intentionally limited to fake attendance/report apps and ticket-event intake; it does not yet connect to a real helpdesk or take actions on ticket data.
+
+## Hosting on Vercel
+
+**Important:** this repository is not yet deployable as a fully working app on Vercel. Vercel can host the Vite frontend, but the current project also needs a long-running Express server, local SQLite storage, and a visible Playwright browser for Teach mode. Vercel's Vite deployment serves the built `dist` frontend; it does not start this repository's `server/index.mjs`. Vercel documents its backend as request-scoped Functions, and its guidance says local SQLite files are not persistent/shared in that environment. See [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite), [SQLite support on Vercel](https://vercel.com/kb/guide/is-sqlite-supported-in-vercel), and [Vercel Function limits](https://vercel.com/docs/functions/limitations).
+
+### Deploy a frontend preview
+
+These settings will put the visual dashboard online, but its `/api/*` features will not work until the backend is adapted or separately hosted and connected:
+
+1. In Vercel, choose **Add New → Project** and import `tanisha-kiran/understudy` from GitHub.
+2. Set the project root to the repository root and choose the **Vite** framework preset.
+3. Set **Build Command** to `npm run build` and **Output Directory** to `dist` (the `build` script runs TypeScript checking and Vite).
+4. Deploy. The resulting URL serves the frontend preview only; buttons that need `/api` or `/sandbox` will not work yet.
+
+### What must change for a fully working Vercel deployment
+
+Before using the deployed dashboard as the real app, complete these deployment tasks:
+
+1. Move the Express routes into Vercel Functions (or host the Express API on a separate Node service and route requests from the frontend to it).
+2. Replace the local SQLite file with a managed database such as a Vercel Marketplace Postgres provider. Vercel's storage integrations provide managed databases through project environment variables; see [Vercel Storage](https://vercel.com/docs/storage).
+3. Keep the visible teaching browser in a local/remote browser worker. The current recorder opens Chrome on the computer running the server, so it cannot open a window on your laptop from a Vercel deployment. The automation runner also needs a suitable hosted browser and its allowed-domain/security setup.
+4. Replace the long-lived local event streams with a hosted realtime service or polling. Vercel Functions have a maximum request duration, so they cannot keep this app's current SSE connections open indefinitely.
+5. Add dashboard authentication and configure production webhook secrets before exposing real ticket data. The current local demo has no user login.
+
+If you host the API on a separate service and later make that backend deployment-ready, Vercel can proxy the dashboard's API and sandbox requests using external rewrites. Replace the example hostname with your backend's HTTPS domain in `vercel.json`:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://YOUR-BACKEND.example.com/api/:path*" },
+    { "source": "/sandbox/:path*", "destination": "https://YOUR-BACKEND.example.com/sandbox/:path*" }
+  ]
+}
+```
+
+This rewrite only connects the frontend to an API host; it does not make the current SQLite store or local-browser recorder work on Vercel. See [Vercel external rewrites](https://vercel.com/docs/routing/rewrites).
+
+For now, use **Local demo** below for the complete working experience. Do not add production ticket or customer data to the frontend-only Vercel preview.
 
 ## Start the demo
 
